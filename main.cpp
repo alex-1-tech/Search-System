@@ -50,31 +50,61 @@ private:
         int document_id;
         int relevance;
     };
+    struct Query
+    {
+        vector<string> plus_words;
+        vector<string> minus_words;
+    };
     map<string, set<int>> word_to_documents_;
     set<string> stop_words_;
-    vector<Document> FindAllDocuments(const string &query)
+
+    Query ParseQuery(const string &query) const
+    {
+        Query query_words;
+        for (auto word : SplitIntoWordsNoStop(query))
+        {
+            if (word[0] == '-')
+                query_words.minus_words.push_back(word.substr(1));
+            else
+                query_words.plus_words.push_back(word);
+        }
+        return query_words;
+    }
+
+    vector<Document> FindAllDocuments(const string &query) const
     {
         map<int, int> document_to_relevance;
-        const vector<string> query_words = SplitIntoWordsNoStop(query);
-        for (const string &word : query_words)
+        const Query query_words = ParseQuery(query);
+        for (const string &word : query_words.plus_words)
         {
             if (word_to_documents_.count(word) == 0)
                 continue;
-            for (const int document_id : word_to_documents_[word])
+            for (const int document_id : word_to_documents_.at(word))
             {
                 ++document_to_relevance[document_id];
+            }
+        }
+
+        for (const string &word : query_words.minus_words)
+        {
+            if (word_to_documents_.count(word) == 0)
+                continue;
+            for (const int document_id : word_to_documents_.at(word))
+            {
+                document_to_relevance[document_id] = 0;
             }
         }
 
         vector<Document> found_documents;
         for (auto [document_id, relevance] : document_to_relevance)
         {
-            found_documents.push_back({document_id, relevance});
+            if (relevance != 0)
+                found_documents.push_back({document_id, relevance});
         }
         return found_documents;
     }
-    vector<string> SplitIntoWordsNoStop(
-        const string &text)
+
+    vector<string> SplitIntoWordsNoStop(const string &text) const
     {
         vector<string> words;
         for (const string &word : SplitIntoWords(text))
@@ -99,7 +129,7 @@ public:
         }
     }
     const int MAX_RESULT_DOCUMENT_COUNT = 5;
-    vector<Document> FindTopDocuments(const string &query)
+    vector<Document> FindTopDocuments(const string &query) const
     {
         auto found_documents = FindAllDocuments(query);
 
@@ -115,7 +145,8 @@ public:
         return found_documents;
     }
 };
-SearchServer CreateSearchServer(){
+SearchServer CreateSearchServer()
+{
     SearchServer search_server;
     const string stop_words_joined = input::ReadLine();
 
@@ -127,9 +158,10 @@ SearchServer CreateSearchServer(){
     }
     return search_server;
 }
+
 int main(int argc, char *argv[])
 {
-    SearchServer search_server = CreateSearchServer();
+    const SearchServer search_server = CreateSearchServer();
 
     const string query = input::ReadLine();
     for (auto [document_id, relevance] : search_server.FindTopDocuments(query))
