@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <execution>
+#include <math.h>
 
 using namespace std;
 
@@ -48,15 +49,17 @@ private:
     struct Document
     {
         int document_id;
-        int relevance;
+        double relevance;
     };
     struct Query
     {
         vector<string> plus_words;
         vector<string> minus_words;
     };
-    map<string, set<int>> word_to_documents_;
+    map<string, map<int, double>> word_to_document_freqs_;
     set<string> stop_words_;
+    int document_count_ = 0;
+    const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
     Query ParseQuery(const string &query) const
     {
@@ -73,23 +76,24 @@ private:
 
     vector<Document> FindAllDocuments(const string &query) const
     {
-        map<int, int> document_to_relevance;
+        map<int, double> document_to_relevance;
+
         const Query query_words = ParseQuery(query);
         for (const string &word : query_words.plus_words)
         {
-            if (word_to_documents_.count(word) == 0)
+            if (word_to_document_freqs_.count(word) == 0)
                 continue;
-            for (const int document_id : word_to_documents_.at(word))
+            for (const auto [document_id, team_freq] : word_to_document_freqs_.at(word))
             {
-                ++document_to_relevance[document_id];
+                document_to_relevance[document_id] += ComputeTfIdfWord(word, team_freq);
             }
         }
 
         for (const string &word : query_words.minus_words)
         {
-            if (word_to_documents_.count(word) == 0)
+            if (word_to_document_freqs_.count(word) == 0)
                 continue;
-            for (const int document_id : word_to_documents_.at(word))
+            for (const auto [document_id, team_freq] : word_to_document_freqs_.at(word))
             {
                 document_to_relevance[document_id] = 0;
             }
@@ -103,7 +107,10 @@ private:
         }
         return found_documents;
     }
-
+    double ComputeTfIdfWord(const string& word, double team_freq) const
+    {
+        return log(document_count_ / (double)word_to_document_freqs_.at(word).size()) * team_freq;
+    }
     vector<string> SplitIntoWordsNoStop(const string &text) const
     {
         vector<string> words;
@@ -123,12 +130,14 @@ public:
     }
     void AddDocument(int document_id, const string &document)
     {
-        for (const string &word : SplitIntoWordsNoStop(document))
+        document_count_ += 1;
+        vector<string> words = SplitIntoWordsNoStop(document);
+        for (const string &word : words)
         {
-            word_to_documents_[word].insert(document_id);
+            word_to_document_freqs_[word][document_id] += (1.0 / (double)words.size());
         }
     }
-    const int MAX_RESULT_DOCUMENT_COUNT = 5;
+    
     vector<Document> FindTopDocuments(const string &query) const
     {
         auto found_documents = FindAllDocuments(query);
