@@ -50,6 +50,7 @@ private:
     {
         int document_id;
         double relevance;
+        int rating;
     };
     struct Query
     {
@@ -57,6 +58,7 @@ private:
         vector<string> minus_words;
     };
     map<string, map<int, double>> word_to_document_freqs_;
+    map<int, int> ratings_;
     set<string> stop_words_;
     int document_count_ = 0;
     const int MAX_RESULT_DOCUMENT_COUNT = 5;
@@ -103,11 +105,11 @@ private:
         for (auto [document_id, relevance] : document_to_relevance)
         {
             if (relevance != 0)
-                found_documents.push_back({document_id, relevance});
+                found_documents.push_back({document_id, relevance, ratings_.at(document_id)});
         }
         return found_documents;
     }
-    double ComputeTfIdfWord(const string& word, double team_freq) const
+    double ComputeTfIdfWord(const string &word, double team_freq) const
     {
         return log(document_count_ / (double)word_to_document_freqs_.at(word).size()) * team_freq;
     }
@@ -124,20 +126,33 @@ private:
 
 public:
     void SetStopWords(const string &text)
+
     {
         for (const string &word : SplitIntoWords(text))
             stop_words_.insert(word);
     }
-    void AddDocument(int document_id, const string &document)
+    static int ComputeAverageRating(const vector<string> &numbers_of_ratings)
+    {   
+        int sum_raiting = 0;
+        int col_ratings = atoi(numbers_of_ratings[0].c_str());
+        for (const string &number : numbers_of_ratings)
+        {
+            sum_raiting += atoi(number.c_str());
+        }
+        return (sum_raiting - col_ratings) * 1.0 / col_ratings;
+    }
+    void AddDocument(int document_id, const string &ratings, const string &document)
     {
         document_count_ += 1;
         vector<string> words = SplitIntoWordsNoStop(document);
+        
+        ratings_[document_id] = ComputeAverageRating(SplitIntoWords(ratings));
         for (const string &word : words)
         {
             word_to_document_freqs_[word][document_id] += (1.0 / (double)words.size());
         }
     }
-    
+    // double ComputeAverageRating()
     vector<Document> FindTopDocuments(const string &query) const
     {
         auto found_documents = FindAllDocuments(query);
@@ -158,12 +173,11 @@ SearchServer CreateSearchServer()
 {
     SearchServer search_server;
     const string stop_words_joined = input::ReadLine();
-
     search_server.SetStopWords(stop_words_joined);
     const int document_count = input::ReadLineWithNumber();
     for (int document_id = 0; document_id < document_count; document_id++)
     {
-        search_server.AddDocument(document_id, input::ReadLine());
+        search_server.AddDocument(document_id, input::ReadLine(), input::ReadLine());
     }
     return search_server;
 }
@@ -173,8 +187,8 @@ int main(int argc, char *argv[])
     const SearchServer search_server = CreateSearchServer();
 
     const string query = input::ReadLine();
-    for (auto [document_id, relevance] : search_server.FindTopDocuments(query))
+    for (auto [document_id, relevance, rating] : search_server.FindTopDocuments(query))
     {
-        cout << "{ document_id = "s << document_id << ", relevance = "s << relevance << " }"s << endl;
+        cout << "{ document_id = "s << document_id << ", relevance = "s << relevance << ", rating= "s << rating << " }"s << endl;
     }
 }
